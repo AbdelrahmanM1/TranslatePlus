@@ -97,7 +97,7 @@ public final class TranslatePlus extends JavaPlugin {
             getLogger().severe("│                                         │");
             getLogger().severe("│  Plugin will be disabled!              │");
             getLogger().severe("└─────────────────────────────────────────┘");
-            getLogger().severe("Error details:", e);
+            getLogger().severe("Error details:");
 
             // Clean up any partially initialized components
             cleanup();
