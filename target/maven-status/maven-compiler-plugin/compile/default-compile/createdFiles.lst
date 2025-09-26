@@ -1,0 +1,15 @@
+dev\abdelrahman\translatePlus\listeners\ChatListener.class
+dev\abdelrahman\translatePlus\commands\TranslateCommand.class
+dev\abdelrahman\translatePlus\commands\subcommands\ReloadSubCommand.class
+dev\abdelrahman\translatePlus\commands\subcommands\HelpSubCommand.class
+dev\abdelrahman\translatePlus\utils\LanguageUtil.class
+dev\abdelrahman\translatePlus\commands\subcommands\StatusSubCommand.class
+dev\abdelrahman\translatePlus\commands\subcommands\OffSubCommand.class
+dev\abdelrahman\translatePlus\commands\subcommands\ListSubCommand.class
+dev\abdelrahman\translatePlus\managers\PlayerManager.class
+dev\abdelrahman\translatePlus\services\GoogleTranslateService.class
+dev\abdelrahman\translatePlus\managers\ConfigManager.class
+dev\abdelrahman\translatePlus\utils\ChatUtil.class
+dev\abdelrahman\translatePlus\commands\subcommands\SetDefaultSubCommand.class
+dev\abdelrahman\translatePlus\TranslatePlus.class
+dev\abdelrahman\translatePlus\commands\subcommands\OnSubCommand.class
