@@ -16,13 +16,19 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class GoogleTranslateService {
 
     private final TranslatePlus plugin;
     private final Map<String, String> translationCache;
     private final Map<String, Long> rateLimitTracker;
+    private final AtomicLong totalTranslations = new AtomicLong(0);
+    private final AtomicLong successfulTranslations = new AtomicLong(0);
+    private final AtomicLong failedTranslations = new AtomicLong(0);
+
     private static final String TRANSLATE_API_URL = "https://translation.googleapis.com/language/translate/v2";
+    private boolean shutdownRequested = false;
 
     public GoogleTranslateService(TranslatePlus plugin) {
         this.plugin = plugin;
@@ -31,15 +37,27 @@ public class GoogleTranslateService {
 
         // Start cache cleanup task
         startCacheCleanupTask();
+
+        plugin.getConfigManager().debugLog("GoogleTranslateService initialized with cache size: " + plugin.getConfigManager().getCacheSize());
     }
 
     public boolean validateApiKey() {
         String apiKey = plugin.getConfigManager().getApiKey();
-        return apiKey != null && !apiKey.equals("PUT-YOUR-KEY-HERE") && !apiKey.isEmpty();
+        boolean isValid = apiKey != null && !apiKey.equals("PUT-YOUR-KEY-HERE") && !apiKey.trim().isEmpty();
+
+        if (isValid) {
+            plugin.getConfigManager().debugLog("API key validation passed");
+        } else {
+            plugin.getConfigManager().debugLog("API key validation failed");
+        }
+
+        return isValid;
     }
 
     public CompletableFuture<String> translateText(String text, String targetLanguage) {
         return CompletableFuture.supplyAsync(() -> {
+            totalTranslations.incrementAndGet();
+
             try {
                 // Validation checks
                 if (!isValidTranslationRequest(text, targetLanguage)) {
@@ -50,18 +68,20 @@ public class GoogleTranslateService {
 
                 // Check cache first
                 if (translationCache.containsKey(cacheKey)) {
-                    plugin.getConfigManager().debugLog("Cache hit for: " + cacheKey);
+                    plugin.getConfigManager().debugLog("Cache hit for: " + cacheKey.substring(0, Math.min(50, cacheKey.length())) + "...");
                     return translationCache.get(cacheKey);
                 }
 
                 // Check rate limiting
                 if (!checkRateLimit()) {
                     plugin.getConfigManager().debugLog("Rate limit exceeded");
+                    failedTranslations.incrementAndGet();
                     return text;
                 }
 
                 String apiKey = plugin.getConfigManager().getApiKey();
                 if (!validateApiKey()) {
+                    failedTranslations.incrementAndGet();
                     return text;
                 }
 
@@ -70,23 +90,31 @@ public class GoogleTranslateService {
                 // Cache the result if cache isn't full
                 if (translationCache.size() < plugin.getConfigManager().getCacheSize()) {
                     translationCache.put(cacheKey, result);
-                    plugin.getConfigManager().debugLog("Cached translation: " + cacheKey);
+                    plugin.getConfigManager().debugLog("Cached translation result");
                 }
+
+                // Track player translation count
+                plugin.getPlayerManager().incrementTranslationCount();
+                successfulTranslations.incrementAndGet();
 
                 return result;
 
             } catch (SocketTimeoutException e) {
                 plugin.getLogger().warning("Translation timeout: " + e.getMessage());
+                failedTranslations.incrementAndGet();
                 return text;
             } catch (IOException e) {
-                if (e.getMessage().contains("quota")) {
+                if (e.getMessage() != null && e.getMessage().contains("quota")) {
                     plugin.getLogger().warning("API quota exceeded");
-                    return text;
+                } else {
+                    plugin.getLogger().warning("Translation failed: " + e.getMessage());
                 }
-                plugin.getLogger().warning("Translation failed: " + e.getMessage());
+                failedTranslations.incrementAndGet();
                 return text;
             } catch (Exception e) {
                 plugin.getLogger().warning("Unexpected translation error: " + e.getMessage());
+                plugin.getConfigManager().debugLog("Translation error stack trace: " + e.toString());
+                failedTranslations.incrementAndGet();
                 return text;
             }
         });
@@ -95,24 +123,32 @@ public class GoogleTranslateService {
     private boolean isValidTranslationRequest(String text, String targetLanguage) {
         // Check if message is valid length
         if (!plugin.getConfigManager().isValidMessageLength(text)) {
+            plugin.getConfigManager().debugLog("Invalid message length: " + text.length());
             return false;
         }
 
         // Check if text is blacklisted
         if (plugin.getConfigManager().isBlacklisted(text)) {
-            plugin.getConfigManager().debugLog("Text contains blacklisted words: " + text);
+            plugin.getConfigManager().debugLog("Text contains blacklisted words");
             return false;
         }
 
-        // Check if we should skip English text
-        if (!plugin.getConfigManager().shouldTranslateEnglishText() &&
-                LanguageUtil.appearsToBeEnglish(text)) {
-            plugin.getConfigManager().debugLog("Skipping English text: " + text);
-            return false;
+        // Check if we should skip English text (only if LanguageUtil exists)
+        if (!plugin.getConfigManager().shouldTranslateEnglishText()) {
+            try {
+                if (LanguageUtil.appearsToBeEnglish(text)) {
+                    plugin.getConfigManager().debugLog("Skipping English text");
+                    return false;
+                }
+            } catch (Exception e) {
+                // LanguageUtil might not exist, continue without this check
+                plugin.getConfigManager().debugLog("LanguageUtil not available, skipping English detection");
+            }
         }
 
         // Check if target language is supported
         if (!isLanguageSupported(targetLanguage)) {
+            plugin.getConfigManager().debugLog("Unsupported target language: " + targetLanguage);
             return false;
         }
 
@@ -139,6 +175,7 @@ public class GoogleTranslateService {
                 .count();
 
         if (recentRequests >= rateLimit) {
+            plugin.getConfigManager().debugLog("Rate limit exceeded: " + recentRequests + "/" + rateLimit);
             return false;
         }
 
@@ -200,7 +237,10 @@ public class GoogleTranslateService {
                     .get(0).getAsJsonObject()
                     .get("translatedText").getAsString();
 
-            plugin.getConfigManager().debugLog("Translation successful: " + processedText + " -> " + translatedText);
+            plugin.getConfigManager().debugLog("Translation successful: " +
+                    processedText.substring(0, Math.min(30, processedText.length())) + "... -> " +
+                    translatedText.substring(0, Math.min(30, translatedText.length())) + "...");
+
             return translatedText;
         }
 
@@ -211,18 +251,75 @@ public class GoogleTranslateService {
         int cleanupInterval = plugin.getConfigManager().getCacheCleanupInterval();
         if (cleanupInterval > 0) {
             plugin.getServer().getScheduler().runTaskTimerAsynchronously(plugin, () -> {
+                if (shutdownRequested) return;
+
                 int oldSize = translationCache.size();
+                int maxSize = plugin.getConfigManager().getCacheSize();
+
                 // Simple cleanup: remove oldest entries if cache is too large
-                if (oldSize > plugin.getConfigManager().getCacheSize()) {
+                if (oldSize > maxSize) {
                     translationCache.clear();
-                    plugin.getConfigManager().debugLog("Cache cleared - was " + oldSize + " entries");
+                    plugin.getConfigManager().debugLog("Cache cleared - was " + oldSize + " entries, max is " + maxSize);
                 }
 
                 // Clean rate limit tracker
-                rateLimitTracker.clear();
+                long currentTime = System.currentTimeMillis();
+                long fiveMinutesAgo = currentTime - 300000; // 5 minutes
+
+                int rateLimitSize = rateLimitTracker.size();
+                rateLimitTracker.entrySet().removeIf(entry -> {
+                    try {
+                        long timestamp = Long.parseLong(entry.getKey().split(":")[1]);
+                        return timestamp < fiveMinutesAgo;
+                    } catch (Exception e) {
+                        return true; // Remove invalid entries
+                    }
+                });
+
+                if (rateLimitSize != rateLimitTracker.size()) {
+                    plugin.getConfigManager().debugLog("Rate limit tracker cleaned: " +
+                            (rateLimitSize - rateLimitTracker.size()) + " entries removed");
+                }
 
             }, cleanupInterval * 60 * 20L, cleanupInterval * 60 * 20L); // Convert minutes to ticks
         }
+    }
+
+    /**
+     * Perform maintenance tasks - called by the main class scheduler
+     */
+    public void performMaintenance() {
+        if (shutdownRequested) return;
+
+        plugin.getConfigManager().debugLog("Performing translation service maintenance");
+
+        // Log statistics
+        if (plugin.getConfigManager().isDebugModeEnabled()) {
+            plugin.getLogger().info("=== Translation Service Stats ===");
+            plugin.getLogger().info("Total translations: " + totalTranslations.get());
+            plugin.getLogger().info("Successful: " + successfulTranslations.get());
+            plugin.getLogger().info("Failed: " + failedTranslations.get());
+            plugin.getLogger().info("Cache size: " + translationCache.size() + "/" + plugin.getConfigManager().getCacheSize());
+            plugin.getLogger().info("Rate limit entries: " + rateLimitTracker.size());
+        }
+
+        // Force cleanup if needed
+        int cacheSize = translationCache.size();
+        int maxCacheSize = plugin.getConfigManager().getCacheSize();
+
+        if (cacheSize > maxCacheSize * 1.2) { // If 20% over limit
+            plugin.getConfigManager().debugLog("Force cleaning cache: " + cacheSize + " > " + maxCacheSize);
+            translationCache.clear();
+        }
+    }
+
+    /**
+     * Shutdown the service gracefully
+     */
+    public void shutdown() {
+        shutdownRequested = true;
+        clearCache();
+        plugin.getConfigManager().debugLog("GoogleTranslateService shutdown completed");
     }
 
     public Map<String, String> getSupportedLanguages() {
@@ -263,17 +360,28 @@ public class GoogleTranslateService {
         languages.put("et", "Estonian");
         languages.put("lv", "Latvian");
         languages.put("lt", "Lithuanian");
+        languages.put("ca", "Catalan");
+        languages.put("eu", "Basque");
+        languages.put("gl", "Galician");
+        languages.put("cy", "Welsh");
+        languages.put("ga", "Irish");
+        languages.put("mt", "Maltese");
+        languages.put("is", "Icelandic");
         return languages;
     }
 
     public boolean isLanguageSupported(String languageCode) {
-        return getSupportedLanguages().containsKey(languageCode.toLowerCase());
+        if (languageCode == null || languageCode.trim().isEmpty()) {
+            return false;
+        }
+        return getSupportedLanguages().containsKey(languageCode.toLowerCase().trim());
     }
 
     public void clearCache() {
+        int oldSize = translationCache.size() + rateLimitTracker.size();
         translationCache.clear();
         rateLimitTracker.clear();
-        plugin.getConfigManager().debugLog("Cache and rate limiter cleared manually");
+        plugin.getConfigManager().debugLog("Cache and rate limiter cleared manually - removed " + oldSize + " entries");
     }
 
     public int getCacheSize() {
@@ -285,6 +393,42 @@ public class GoogleTranslateService {
         stats.put("cache_size", String.valueOf(translationCache.size()));
         stats.put("cache_limit", String.valueOf(plugin.getConfigManager().getCacheSize()));
         stats.put("rate_limit_entries", String.valueOf(rateLimitTracker.size()));
+        stats.put("total_translations", String.valueOf(totalTranslations.get()));
+        stats.put("successful_translations", String.valueOf(successfulTranslations.get()));
+        stats.put("failed_translations", String.valueOf(failedTranslations.get()));
+        stats.put("cache_hit_ratio", calculateCacheHitRatio());
         return stats;
+    }
+
+    private String calculateCacheHitRatio() {
+        long total = totalTranslations.get();
+        if (total == 0) return "0%";
+
+        // Approximate cache hits (this is a simplified calculation)
+        long successful = successfulTranslations.get();
+        if (successful == 0) return "0%";
+
+        double ratio = ((double) translationCache.size() / successful) * 100;
+        return String.format("%.1f%%", Math.min(ratio, 100.0));
+    }
+
+    /**
+     * Get service health status
+     */
+    public boolean isHealthy() {
+        return !shutdownRequested &&
+                plugin.getConfigManager().isApiKeyConfigured() &&
+                translationCache.size() <= plugin.getConfigManager().getCacheSize() * 2;
+    }
+
+    /**
+     * Get translation success rate
+     */
+    public double getSuccessRate() {
+        long total = totalTranslations.get();
+        if (total == 0) return 100.0;
+
+        long successful = successfulTranslations.get();
+        return (double) successful / total * 100.0;
     }
 }
