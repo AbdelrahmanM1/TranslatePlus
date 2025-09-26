@@ -225,7 +225,6 @@ We welcome contributions! Please:
 ## 📞 Support
 
 - **Issues**: [GitHub Issues](https://github.com/AbdelrahmanM1/TranslatePlus/issues)
-- **Discussions**: [GitHub Discussions](https://github.com/AbdelrahmanM1/TranslatePlus/discussions)
 
 
 ## 📈 Statistics
