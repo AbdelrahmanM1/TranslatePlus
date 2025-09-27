@@ -15,7 +15,7 @@ TranslatePlus breaks down language barriers by providing seamless, intelligent c
 - **🌍 Real-time Chat Translation** - Instant translation of in-game chat messages
 - **🤖 Dual Translation Engines** - Choose between Google Translate or OpenAI GPT models
 - **🔍 Smart Language Detection** - Automatic detection of message languages
-- **💬 100+ Languages Supported** - Comprehensive global language coverage
+- **💬 45+ Languages Supported** - Comprehensive global language coverage
 
 ### ⚡ Performance & Optimization
 - **🚀 Async Processing** - Non-blocking translation requests for optimal performance
@@ -478,3 +478,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Made with ❤️ by [3bdoabk](https://github.com/AbdelrahmanM1)**
 
 *If you enjoy using TranslatePlus, please consider giving us a ⭐ on GitHub!*
+
