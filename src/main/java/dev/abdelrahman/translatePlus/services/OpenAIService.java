@@ -100,23 +100,40 @@ public class OpenAIService {
                 return false;
             }
 
-            if (apiKey.equals("PUT-YOUR-OPENAI-KEY-HERE")) {
-                plugin.getConfigManager().debugLog("OpenAI API key is default placeholder");
+            apiKey = apiKey.trim();
+
+            if (apiKey.equals("PUT-YOUR-OPENAI-KEY-HERE") || apiKey.equals("PUT-YOUR-GOOGLE-KEY-HERE")) {
+                plugin.getConfigManager().debugLog("OpenAI API key is default placeholder: " + apiKey);
                 return false;
             }
 
-            // More robust key validation
-            boolean isValid = OPENAI_KEY_PATTERN.matcher(apiKey.trim()).matches();
+            // More flexible key validation - OpenAI keys can vary in length
+            // Updated pattern to handle different OpenAI key formats
+            boolean isValidFormat = apiKey.startsWith("sk-") && apiKey.length() >= 20;
 
-            if (isValid) {
-                plugin.getConfigManager().debugLog("OpenAI API key validation passed");
+            // Additional validation - check for reasonable key structure
+            if (isValidFormat) {
+                // OpenAI keys typically have specific patterns after sk-
+                // But let's be more flexible than the original rigid pattern
+                boolean hasValidStructure = apiKey.matches("^sk-[A-Za-z0-9\\-_]{20,}$");
+
+                if (hasValidStructure) {
+                    plugin.getConfigManager().debugLog("OpenAI API key validation passed (length: " + apiKey.length() + ")");
+                    return true;
+                } else {
+                    plugin.getConfigManager().debugLog("OpenAI API key structure validation failed. Key: " +
+                            apiKey.substring(0, Math.min(10, apiKey.length())) + "... (length: " + apiKey.length() + ")");
+                }
             } else {
-                plugin.getConfigManager().debugLog("OpenAI API key format validation failed");
+                plugin.getConfigManager().debugLog("OpenAI API key format validation failed. Key starts with: " +
+                        apiKey.substring(0, Math.min(10, apiKey.length())) + "... (length: " + apiKey.length() + ")");
             }
 
-            return isValid;
+            return false;
+
         } catch (Exception e) {
             plugin.getConfigManager().debugLog("OpenAI API key validation error: " + e.getMessage());
+            e.printStackTrace();
             return false;
         }
     }
