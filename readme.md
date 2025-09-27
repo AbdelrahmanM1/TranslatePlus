@@ -5,14 +5,14 @@
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Build Status](https://img.shields.io/badge/Build-Passing-brightgreen.svg)](https://github.com/3bdoabk/TranslatePlus)
 
-**Real-time chat translation plugin for Minecraft servers using Google Translate API**
+**Real-time chat translation plugin for Minecraft servers using Google Translate API & OpenAI APIs**
 
 TranslatePlus enables players to communicate across language barriers by automatically translating chat messages into their preferred language. Perfect for international servers with diverse player bases.
 
 ## ✨ Features
-
 - 🌍 **Real-time Chat Translation** - Messages are automatically translated for players who have it enabled
 - 🚀 **100+ Languages Supported** - Powered by Google Translate API
+- 🤖 **AI-Powered Translation Option** - Option to use OpenAI GPT models for smarter, context-aware translation
 - ⚡ **High Performance** - Async processing with intelligent caching
 - 🛡️ **Smart Rate Limiting** - Prevents API abuse and spam
 - 🎯 **Blacklist System** - Exclude server commands and technical terms
@@ -245,3 +245,4 @@ We welcome contributions! Please:
 **Made with ❤️ by [3bdoabk](https://github.com/AbdelrahmanM1)**
 
 *If you find this plugin useful, please ⭐ star the repository!*
+
