@@ -360,10 +360,6 @@ translation-blacklist:
     - "/tell"
     - "/whisper"
   
-  regex-patterns:
-    - "^\\[.*\\]$"  # Ignore text in brackets
-    - "^<.*>$"      # Ignore text in arrows
-    - ".*@.*"       # Ignore mentions
 ```
 
 ## 🌐 Language Support Details
@@ -478,4 +474,5 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Made with ❤️ by [3bdoabk](https://github.com/AbdelrahmanM1)**
 
 *If you enjoy using TranslatePlus, please consider giving us a ⭐ on GitHub!*
+
 
